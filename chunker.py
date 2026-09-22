@@ -97,7 +97,52 @@ def split_documents(documents: list[Document]) -> list[Chunk]:
       - Would splitting on paragraph breaks keep more thoughts intact than
         splitting on a character count?
     """
-    return fallback_split(documents)
+    MIN_PARAGRAPH_LENGTH=50
+
+    Dependent_openers=(
+        "it's","it is","they're","they are","he's","he is","she's","she is",
+        "this","that","these","those",
+        "the good","the bad","the ugly"
+    )
+    def starts_with_dependent_opener(text:str)->bool:
+        lower_text=text.lower().strip()
+        return lower_text.startswith(Dependent_openers)
+
+    chunks:list[Chunk] = []
+    for doc in documents:
+        raw_paragraphs = [p.strip() for p in doc.text.split("\n\n") if p.strip()]
+
+        merged_paragraphs:list[str] =[]
+        buffer =""
+        for para in raw_paragraphs:
+            if len(para)<MIN_PARAGRAPH_LENGTH:
+                buffer += para+"\n\n"
+            else:
+                merged_paragraphs.append((buffer+para).strip())
+                buffer=""
+        if buffer:
+            if merged_paragraphs:
+                merged_paragraphs[-1]=(merged_paragraphs[-1]+"\n\n"+buffer).strip()
+            else:
+                merged_paragraphs.append(buffer.strip())
+
+        final_paragraphs:list[str] =[]
+        for para in merged_paragraphs:
+            if final_paragraphs and starts_with_dependent_opener(para):
+                final_paragraphs[-1] = (final_paragraphs[-1]+"\n\n"+para).strip()
+            else:
+                final_paragraphs.append(para)
+        
+        for index, text in enumerate(final_paragraphs):
+            chunks.append(
+                Chunk(
+                    text=text,
+                    source=doc.source,
+                    index=index,
+                    produced_by="chunker.py::split_documents",
+                )
+            )
+    return chunks
 
 
 def describe(chunks: list[Chunk]) -> str:
