@@ -53,7 +53,8 @@ def load_scorer():
 
 def run_once(question: str, top_k, threshold, corpus, variant):
     """One question, one run. Returns the answer and what retrieval gave us."""
-    from store import search
+    from store import search_auto as search # i changed this to search_auto as search to use hybrid search if enabled
+    # from store import search
     import gate
     from generate import answer_from_chunks
 

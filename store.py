@@ -32,6 +32,9 @@ import chromadb  # noqa: E402
 import config
 from chunker import Chunk
 
+# a switch for bm25 hybrid search
+USE_HYBRID = os.getenv("AI201_HYBRID", "0") == "1"
+
 
 @dataclass
 class Result:
@@ -238,3 +241,93 @@ def reset():
     """Delete every index. Occasionally the fastest way out of a mess."""
     if config.CHROMA_DIR.exists():
         shutil.rmtree(config.CHROMA_DIR)
+
+
+
+# try adding bm25 to do a hybrid search
+_bm25_cache: dict[str, tuple] = {}
+
+
+def _build_bm25_index(corpus, variant= "default"):
+    from rank_bm25 import BM25Okapi
+
+    name = config.collection_name(corpus, variant)
+    if name in _bm25_cache:
+        return _bm25_cache[name]
+
+    collection = _client().get_collection(name)
+    raw = collection.get()
+
+    texts = raw["documents"]
+    metas = raw["metadatas"]
+
+    tokenized = [text.lower().split() for text in texts]
+    bm25 = BM25Okapi(tokenized)
+
+    _bm25_cache[name] = (bm25, texts, metas)
+    return _bm25_cache[name]
+
+
+def search_hybrid(
+    question,
+    top_k = None,
+    corpus = None,
+    variant= "default",
+    alpha = 0.5,
+):
+    top_k = top_k or config.TOP_K
+    name = config.collection_name(corpus, variant)
+
+    semantic_results = search(question, top_k=max(top_k * 3, 15), corpus=corpus, variant=variant)
+
+    if not semantic_results:
+        return []
+
+    distances = [r.distance for r in semantic_results]
+    d_min, d_max = min(distances), max(distances)
+    d_range = (d_max - d_min) or 1.0
+    semantic_scores = {
+        r.label: 1.0 - (r.distance - d_min) / d_range for r in semantic_results
+    }
+
+
+    bm25, texts, metas = _build_bm25_index(corpus, variant)
+    tokenized_question = question.lower().split()
+    bm25_scores_raw = bm25.get_scores(tokenized_question)
+
+    b_min, b_max = min(bm25_scores_raw), max(bm25_scores_raw)
+    b_range = (b_max - b_min)
+    bm25_by_label = {}
+    for text, meta, score in zip(texts, metas, bm25_scores_raw):
+        label = f"{meta.get('source', 'unknown')}#{meta.get('index', 0)}"
+        bm25_by_label[label] = (score - b_min) / b_range
+
+    combined = []
+    for r in semantic_results:
+        sem_score = semantic_scores.get(r.label, 0.0)
+        kw_score = bm25_by_label.get(r.label, 0.0)
+        blended = alpha * sem_score + (1 - alpha) * kw_score
+        combined.append((blended, r))
+
+    combined.sort(key=lambda pair: pair[0], reverse=True)
+
+    top = combined[:top_k]
+    final = []
+    for blended_score, r in top:
+        final.append(
+            Result(
+                text=r.text,
+                source=r.source,
+                label=r.label,
+                distance=1.0 - blended_score,
+                produced_by=r.produced_by,
+            )
+        )
+    return final
+
+
+def search_auto(question, top_k=None, corpus=None, variant="default"):
+    if USE_HYBRID:
+        return search_hybrid(question, top_k=top_k, corpus=corpus, variant=variant)
+    return search(question, top_k=top_k, corpus=corpus, variant=variant)
+
