@@ -165,6 +165,7 @@ According to the numbers above, I could tell that there's a clean gap between th
 
 1.  First, while I was running my codes and going through milestones, I wonder if every single time I run code in my terminal, it reflects my changes in the code that I modified just now. So I asked Claude that and Claude states that as long as I save the file, every time I run something in my terminal, it's using my newest code in the directory. So I remember to save my code as I move forward.
 2.  I gave Claude five chunks of mine and asked whether all of them could be understood alone and is there anything I should revise. Claude says those looks fine but there's still minor issues about the "it"s, one may not understand what it refers to without context. So I go ahead and improved my Chunker.py.
+3.  I used Claude to help me confirm that my criterion 4 was missed. And it agreed with my intuitions and asked me to locate the original file to identify the problem. After checking the txt file, I soon realized that it was probably due to the fact that the title was in one chunk and the details followed got split into the next one.
 
 ```{=html}
 <!-- ── Stretch features ─────────────────────────────────────────────────────
@@ -194,22 +195,35 @@ According to the numbers above, I could tell that there's a clean gap between th
      Criterion 3 is measured in one deterministic pass rather than three, so
      the same number goes in all three run columns. That's correct, not lazy.
 
-     Milestone 1. -->
+     Milestone 1. --> I do want to stress this point here: since criterion 3 is pure comparision against a fixed number, so it does not vary between runs. And criterion 4 is testing the chunks, which also does not change between runs, so I used '/' for Run 2 and Run 3 in those circumstances.
 ```
 
 | Criterion                               | Target | Run 1 | Run 2 | Run 3 | Verdict |
 |-----------------------------------------|--------|-------|-------|-------|---------|
-| 1\. Retrieved chunk contains the answer | 4 of 5 |       |       |       |         |
-| 2\. Every answer names a source         | 5 of 5 |       |       |       |         |
-| 3\. Gate stops out-of-corpus questions  | 4 of 5 |       |       |       |         |
-| 4\.                                     |        |       |       |       |         |
-| 5\.                                     |        |       |       |       |         |
+| 1\. Retrieved chunk contains the answer | 4 of 5 | pass  | pass  | pass  | MET     |
+| 2\. Every answer names a source         | 5 of 5 | pass  | pass  | pass  | MET     |
+| 3\. Gate stops out-of-corpus questions  | 4 of 5 | pass  | /     | /     | MET     |
+| 4\. Self-contained thought              | 4 of 5 | fail  | /     | /     | MISSED  |
+| 5\. Speed                               | 4 of 5 | pass  | pass  | pass  | MET     |
 
-```{=html}
+````{=html}
 <!-- Underneath, paste the REAL output for each criterion from one of your
      runs — the actual text your system produced, not a description of it.
      Name the file and function that produced it. -->
+     ## Real output
+
+This is what the system actually produced. Paste the relevant parts
+into your README underneath the table — the rubric asks for real
+output as text, not a description of it.
+
+### Does dining dollars balance roll over from spring to the next fall semester? — run 1
+
+- Best distance: 0.1716 (passed the gate)
+- Sources retrieved: admin_dining_dollars.txt, admin_meal_plan_changes.txt, dining_north_kitchen.txt, dining_pellew_dining_hall.txt, money_jobs.txt
+
 ```
+No, dining dollars do not roll over from the spring semester to the following autumn; whatever is left in May disappears. This information comes from `admin_dining_dollars.txt`.
+````
 
 ## Verdicts
 
@@ -224,13 +238,13 @@ According to the numbers above, I could tell that there's a clean gap between th
      Milestone 2. -->
 ```
 
-| \#  | Criterion | Verdict | How I decided |
-|-----|-----------|---------|---------------|
-| 1   |           |         |               |
-| 2   |           |         |               |
-| 3   |           |         |               |
-| 4   |           |         |               |
-| 5   |           |         |               |
+| \# | Criterion | Verdict | How I decided |
+|----|----|----|----|
+| 1 | Retrieved chunk contains the answer (target: 4 of 5) | MET | Every run shows 5/5 pass. |
+| 2 | Every answer names a source (target: 5 of 5) | MET | Read all 15 answer texts (5 questions \* 3 runs) directly from the run log. Every single one of them names a filename. |
+| 3 | Gate stops out-of-corpus questions (target: 4 of 5) | MET | The output stated '-\> gate refused 5 of 5' with distance far away from the 0.6 cutoff. |
+| 4 | Self-contained chunks (target: 4 of 5) | MISSED | This criterion was hard to evaluate at first, but after checking the chunks, I decided that it only hit 3 of 5 instead of 4 of 5. I will put in my diagnosis in the next section. |
+| 5 | Speed (target: 4 of 5) | MET | I used the time function to test those questions and also checked three times for variance. All the runs landed within the threshold. I also used 'AI201_CACHE=0' to force a real model call rather than a cached result. |
 
 ## Diagnoses
 
@@ -251,18 +265,21 @@ According to the numbers above, I could tell that there's a clean gap between th
      Missed nothing? Say so, then say honestly whether your targets were set
      low, and which one you'd tighten and to what.
 
-     Milestone 3. -->
+     Milestone 3. --> I missed Criterion 4 and after investigating, I consider it to be a known limitation. This miss was also not caught by DEPENDENT_OPENERS in my chunker.py: dining_verrill_street_grill.txt#1 reads "Hours are 11:00am to 1:00 am daily during term..." The sentence doesn't make sense since it's missing a stated subject. Same problem occurred for chunk 2: "The one piece of advice: start the term project in week three, not week eight; everyone learns this the hard way."
 ```
 
 ## The Improvement
 
 **What I changed:**
 
+I implemented hybrid search, using both bm25 and existing vector search in the hope of getting a better result.
+
 **Why I picked it:**
 
 ```{=html}
 <!-- Connect it to a specific diagnosis above in one sentence. If you can't,
      you picked a fix because it sounded impressive. -->
+     I tried changing the ground instructions and changing top_k, but those only minorly changed the process, the results stay the same.
 ```
 
 ### Run Log — After
@@ -274,11 +291,13 @@ According to the numbers above, I could tell that there's a clean gap between th
 
 | Criterion                               | Target | Run 1 | Run 2 | Run 3 | Verdict |
 |-----------------------------------------|--------|-------|-------|-------|---------|
-| 1\. Retrieved chunk contains the answer | 4 of 5 |       |       |       |         |
-| 2\. Every answer names a source         | 5 of 5 |       |       |       |         |
-| 3\. Gate stops out-of-corpus questions  | 4 of 5 |       |       |       |         |
-| 4\.                                     |        |       |       |       |         |
-| 5\.                                     |        |       |       |       |         |
+| 1\. Retrieved chunk contains the answer | 4 of 5 | pass  | pass  | pass  | MET     |
+| 2\. Every answer names a source         | 5 of 5 | pass  | pass  | pass  | MET     |
+| 3\. Gate stops out-of-corpus questions  | 4 of 5 | pass  | /     | /     | MET     |
+| 4\. Self-contained thought              | 4 of 5 | fail  | /     | /     | MISSED  |
+| 5\. Speed                               | 4 of 5 | pass  | pass  | pass  | MET     |
+
+\*\* However, every "best distance" came back as exactly 0.000 on all 5 in-scope questions.
 
 **Did it help?**
 
@@ -288,7 +307,8 @@ According to the numbers above, I could tell that there's a clean gap between th
      and is more interesting than one that worked. What matters is that you can
      tell.
 
-     Milestone 4. -->
+     Milestone 4. --> 
+     No, also since trying it and debuggin the bm25 part costs me a lot of time (and I think it gave me an actual headache.) It broke the distance metric because using this normalization formula: sem_score = 1.0 - (distance - d_min) / d_range, would alwasy give out the top-ranked chunk's result as 1.0, because its distance is the batch minimum. And after using the blended score to calculate, distance became exactly 0.000.
 ```
 
 ## What's Still Broken
@@ -300,7 +320,9 @@ According to the numbers above, I could tell that there's a clean gap between th
      "I ran out of time" is fine if it's true. Pretending nothing is left is
      not.
 
-     Milestone 5. -->
+     Milestone 5. --> 
+     - Bm25 hybrid search's distance metric should be revised: maybe rather than the min/max of each individual query's candidate batch.
+     - irrelevant chunks retrived alongside the correct one: this was the problem that hybrid search was meant to fix, but it is still there. I tried changing TOP_K from 5 to 3, and tightening the ground insturction, but those didn't seem to work at all, other than cutting back on the token usage.
 ```
 
 ## What I'd Do Differently
@@ -310,4 +332,5 @@ According to the numbers above, I could tell that there's a clean gap between th
      differently, and why?
 
      Milestone 5. -->
+     I do think during the process, I've considered almost everything that I could, but if i were to change a criterion, I would use the 5th one to : the relevance gate's distance scale stays meaningful at all times. So that I could catch the distance error earlier.
 ```
